@@ -4,6 +4,7 @@ Paste the below in mysql-statefulset.yml file
 
 <pre>
 ---
+# 1️⃣ Secret for MySQL root password
 apiVersion: v1
 kind: Secret
 metadata:
@@ -12,6 +13,7 @@ type: Opaque
 stringData:
   root-password: root@123
 ---
+# 2️⃣ Persistent Volumes (Static, NFS)
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -30,14 +32,10 @@ spec:
   nfs:
     path: /var/nfs/jegan/mysql/mysql-0
     server: 192.168.10.200
-  claimRef:
-    name: data-mysql-0
-    namespace: default
 ---
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-
   name: mysql-pv-1
 spec:
   capacity:
@@ -53,9 +51,6 @@ spec:
   nfs:
     path: /var/nfs/jegan/mysql/mysql-1
     server: 192.168.10.200
-  claimRef:
-    name: data-mysql-1
-    namespace: default
 ---
 apiVersion: v1
 kind: PersistentVolume
@@ -75,10 +70,23 @@ spec:
   nfs:
     path: /var/nfs/jegan/mysql/mysql-2
     server: 192.168.10.200
-  claimRef:
-    name: data-mysql-2
-    namespace: default
 ---
+# 3️⃣ Headless Service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  ports:
+    - port: 3306
+      name: mysql
+    - port: 33061
+      name: mysql-gr
+  clusterIP: None
+  selector:
+    app: mysql
+---
+# 4️⃣ StatefulSet
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -113,9 +121,6 @@ spec:
               value: repl_user
             - name: MYSQL_REPLICATION_PASSWORD
               value: repl_pass
-          volumeMounts:
-            - name: data
-              mountPath: /var/lib/mysql
           readinessProbe:
             exec:
               command:
@@ -124,6 +129,9 @@ spec:
                 - "mysqladmin ping -uroot -p$MYSQL_ROOT_PASSWORD"
             initialDelaySeconds: 30
             periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -133,20 +141,6 @@ spec:
         resources:
           requests:
             storage: 10Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mysql
-spec:
-  ports:
-    - port: 3306
-      name: mysql
-    - port: 33061
-      name: mysql-gr
-  clusterIP: None
-  selector:
-    app: mysql
 </pre>
 
 Run it
