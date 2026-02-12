@@ -3,7 +3,6 @@
 Paste the below in mysql-statefulset.yml file
 
 ```
----
 apiVersion: v1
 kind: Secret
 metadata:
@@ -13,82 +12,41 @@ stringData:
   root-password: root@123
 ---
 apiVersion: v1
-kind: PersistentVolume
+kind: PersistentVolumeClaim
 metadata:
-  name: mysql-pv-0
+  name: mysql-pvc-0
 spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: mysql-nfs
-  persistentVolumeReclaimPolicy: Retain
-  mountOptions:
-    - hard
-    - nfsvers=4.1
-    - noatime
-  nfs:
-    path: /var/nfs/jegan/mysql/mysql-0
-    server: 192.168.10.200
+  accessModes: [ "ReadWriteOnce" ]
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: v1
-kind: PersistentVolume
+kind: PersistentVolumeClaim
 metadata:
-  name: mysql-pv-1
+  name: mysql-pvc-1
 spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: mysql-nfs
-  persistentVolumeReclaimPolicy: Retain
-  mountOptions:
-    - hard
-    - nfsvers=4.1
-    - noatime
-  nfs:
-    path: /var/nfs/jegan/mysql/mysql-1
-    server: 192.168.10.200
+  accessModes: [ "ReadWriteOnce" ]
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: v1
-kind: PersistentVolume
+kind: PersistentVolumeClaim
 metadata:
-  name: mysql-pv-2
+  name: mysql-pvc-2
 spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: mysql-nfs
-  persistentVolumeReclaimPolicy: Retain
-  mountOptions:
-    - hard
-    - nfsvers=4.1
-    - noatime
-  nfs:
-    path: /var/nfs/jegan/mysql/mysql-2
-    server: 192.168.10.200
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mysql
-spec:
-  ports:
-    - port: 3306
-      name: mysql
-    - port: 33061
-      name: mysql-gr
-  clusterIP: None
-  selector:
-    app: mysql
+  accessModes: [ "ReadWriteOnce" ]
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: mysql
 spec:
-  serviceName: mysql
+  serviceName: "mysql"
   replicas: 3
   selector:
     matchLabels:
@@ -98,45 +56,74 @@ spec:
       labels:
         app: mysql
     spec:
+      initContainers:
+      - name: install-group-replication
+        image: bitnami/mysql:8.0
+        command:
+          - bash
+          - -c
+          - |
+            mysql --user=root --password="$MYSQL_ROOT_PASSWORD" -e "INSTALL PLUGIN group_replication SONAME 'group_replication.so';" || true
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysql-secret
+                key: root-password
       containers:
-        - name: mysql
-          image: docker.io/mysql:8.0
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 3306
-              name: mysql
-            - containerPort: 33061
-              name: mysql-gr
-          env:
-            - name: MYSQL_ROOT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: root-password
-            - name: MYSQL_REPLICATION_USER
-              value: repl_user
-            - name: MYSQL_REPLICATION_PASSWORD
-              value: repl_pass
-          readinessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - "mysqladmin ping -uroot -p$MYSQL_ROOT_PASSWORD"
-            initialDelaySeconds: 30
-            periodSeconds: 10
-          volumeMounts:
-            - name: data
-              mountPath: /var/lib/mysql
+      - name: mysql
+        image: bitnami/mysql:8.0
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysql-secret
+                key: root-password
+          - name: MYSQL_REPLICATION_MODE
+            value: "group"
+          - name: MYSQL_GROUP_NAME
+            value: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+          - name: MYSQL_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        ports:
+          - containerPort: 3306
+            name: mysql
+          - containerPort: 33060
+            name: mysqlx
+        volumeMounts:
+          - name: data
+            mountPath: /bitnami/mysql
+        command:
+          - bash
+          - -c
+          - |
+            #!/bin/bash
+            set -e
+            # bootstrap first node only
+            if [[ "$HOSTNAME" == "mysql-0" ]]; then
+              echo "Bootstrapping first node"
+              mysqld --user=mysql &
+              sleep 15
+              mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SET GLOBAL group_replication_bootstrap_group=ON; START GROUP_REPLICATION; SET GLOBAL group_replication_bootstrap_group=OFF;"
+              fg
+            else
+              echo "Joining cluster"
+              mysqld --user=mysql &
+              sleep 15
+              mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "START GROUP_REPLICATION;"
+              fg
+            fi
   volumeClaimTemplates:
     - metadata:
         name: data
       spec:
-        accessModes: ["ReadWriteOnce"]
-        storageClassName: mysql-nfs
+        accessModes: [ "ReadWriteOnce" ]
         resources:
           requests:
-            storage: 10Gi
+            storage: 1Gi
+
 ```
 Run it
 ```
