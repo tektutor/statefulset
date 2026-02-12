@@ -174,66 +174,45 @@ oc apply -f mysql-ss.yaml
 Now get inside master mysql instance
 ```
 command:
-  - bash
-  - -ec
+  - /bin/bash
+  - -c
   - |
-    echo "==== MySQL GR Init ===="
+    set -e
 
-    ORDINAL=${HOSTNAME##*-}
-    SERVER_ID=$((100 + ORDINAL))
-    GROUP_NAME="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    echo "Starting MySQL..."
+    /usr/sbin/mysqld &
+    pid="$!"
 
-    cat > /etc/mysql/conf.d/group-repl.cnf <<EOF
-[mysqld]
-server-id=${SERVER_ID}
-report_host=${HOSTNAME}.mysql
-log_bin=binlog
-binlog_format=ROW
-gtid_mode=ON
-enforce_gtid_consistency=ON
-transaction_write_set_extraction=XXHASH64
-loose-group_replication_group_name="${GROUP_NAME}"
-loose-group_replication_start_on_boot=off
-loose-group_replication_bootstrap_group=off
-loose-group_replication_local_address="${HOSTNAME}.mysql:33061"
-loose-group_replication_group_seeds="mysql-0.mysql:33061,mysql-1.mysql:33061,mysql-2.mysql:33061"
-EOF
-
-    docker-entrypoint.sh mysqld &
-    pid=$!
-
-    echo "Waiting for MySQL..."
-    until mysqladmin ping -h127.0.0.1 --silent; do
+    echo "Waiting for MySQL to be ready..."
+    until mysqladmin ping -h127.0.0.1 -uroot -p"${MYSQL_ROOT_PASSWORD}" --silent; do
       sleep 2
     done
 
-    echo "Configuring replication user..."
+    echo "MySQL is ready"
 
-    mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "
-      INSTALL PLUGIN group_replication SONAME 'group_replication.so';
-      CREATE USER IF NOT EXISTS 'repl'@'%' IDENTIFIED BY 'replpass';
-      GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%';
-      FLUSH PRIVILEGES;
-      CHANGE REPLICATION SOURCE TO
-        SOURCE_USER='repl',
-        SOURCE_PASSWORD='replpass'
-      FOR CHANNEL 'group_replication_recovery';
-    "
+    mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" <<EOF
+    INSTALL PLUGIN group_replication SONAME 'group_replication.so';
+    SET PERSIST group_replication_group_name='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    SET PERSIST group_replication_start_on_boot=OFF;
+    SET PERSIST group_replication_local_address='${HOSTNAME}.mysql:33061';
+    SET PERSIST group_replication_group_seeds='mysql-0.mysql:33061,mysql-1.mysql:33061,mysql-2.mysql:33061';
+    SET PERSIST group_replication_bootstrap_group=OFF;
+    SET PERSIST group_replication_single_primary_mode=ON;
+    SET PERSIST group_replication_enforce_update_everywhere_checks=OFF;
+EOF
 
-    if [ "$ORDINAL" = "0" ]; then
-      echo "Bootstrapping cluster..."
-      mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "
-        SET GLOBAL group_replication_bootstrap_group=ON;
-        START GROUP_REPLICATION;
-        SET GLOBAL group_replication_bootstrap_group=OFF;
-      "
+    if [ "${HOSTNAME}" = "mysql-0" ]; then
+      echo "Bootstrapping cluster from mysql-0"
+      mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SET GLOBAL group_replication_bootstrap_group=ON;"
+      mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "START GROUP_REPLICATION;"
+      mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SET GLOBAL group_replication_bootstrap_group=OFF;"
     else
-      echo "Joining cluster..."
+      echo "Joining cluster from ${HOSTNAME}"
       sleep 10
-      mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "START GROUP_REPLICATION;"
+      mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "START GROUP_REPLICATION;"
     fi
 
-    wait $pid
+    wait "$pid"
 ```
 
 In mysql-1
