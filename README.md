@@ -14,7 +14,7 @@ spec:
     - port: 3306
       name: mysql
     - port: 33061
-      name: group-replication
+      name: grp-repl
   selector:
     app: mysql
 </pre>
