@@ -78,10 +78,10 @@ spec:
         - name: mysql
           image: image-registry.openshift-image-registry.svc:5000/openshift/mariadb:1.0
           ports:
-            - containerPort: 3306
-              name: mysql
+          - containerPort: 3306
+            name: mysql
             - containerPort: 33061
-              name: group-replication
+              name: grp-repl
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
