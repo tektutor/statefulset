@@ -200,7 +200,10 @@ command:
     SET PERSIST group_replication_single_primary_mode=ON;
     SET PERSIST group_replication_enforce_update_everywhere_checks=OFF;
 EOF
+```
 
+Let's run this within the mysql-0 pod shell
+```
 if [ "${HOSTNAME}" = "mysql-0" ]; then
   echo "Bootstrapping cluster from mysql-0"
   mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SET GLOBAL group_replication_bootstrap_group=ON;"
@@ -211,9 +214,6 @@ else
   sleep 10
   mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "START GROUP_REPLICATION;"
 fi
-
-wait "$pid"
-
 ```
 
 In mysql-1
