@@ -208,7 +208,49 @@ command:
 
     echo "Starting MySQL..."
     docker-entrypoint.sh mysqld &
-    pi
+    pid="$!"
+
+    echo "Waiting for MySQL..."
+    until mysqladmin ping -h127.0.0.1 --silent; do
+      sleep 2
+    done
+
+    echo "Installing plugin and replication user..."
+
+    mysql -uroot -p${MYSQL_ROOT_PASSWORD} <<SQL
+    INSTALL PLUGIN group_replication SONAME 'group_replication.so';
+
+    CREATE USER IF NOT EXISTS 'repl'@'%' IDENTIFIED BY 'replpass';
+    GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%';
+    FLUSH PRIVILEGES;
+
+    CHANGE REPLICATION SOURCE TO
+      SOURCE_USER='repl',
+      SOURCE_PASSWORD='replpass'
+    FOR CHANNEL 'group_replication_recovery';
+    SQL
+
+    if [ "$ORDINAL" = "0" ]; then
+      echo "Bootstrapping cluster on mysql-0"
+
+      mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "
+        SET GLOBAL group_replication_bootstrap_group=ON;
+        START GROUP_REPLICATION;
+        SET GLOBAL group_replication_bootstrap_group=OFF;
+      "
+    else
+      echo "Joining cluster from ${HOSTNAME}"
+      sleep 10
+
+      for i in {1..10}; do
+        mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "START GROUP_REPLICATION;" && break
+        echo "Retrying join..."
+        sleep 5
+      done
+    fi
+
+    echo "========== Initialization Complete =========="
+    wait $pid
 ```
 
 In mysql-1
