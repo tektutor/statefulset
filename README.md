@@ -80,8 +80,8 @@ spec:
           ports:
           - containerPort: 3306
             name: mysql
-            - containerPort: 33061
-              name: grp-repl
+          - containerPort: 33061
+            name: grp-repl
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
