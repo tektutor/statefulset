@@ -113,7 +113,7 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 10Gi
+            storage: 1Gi
 </pre>
 
 Now let's deploy it
