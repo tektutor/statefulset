@@ -177,21 +177,28 @@ command:
   - bash
   - -ec
   - |
-    echo "===== MySQL Group Replication Init ====="
+    echo "========== MySQL Group Replication Init =========="
 
     ORDINAL=${HOSTNAME##*-}
     SERVER_ID=$((100 + ORDINAL))
     GROUP_NAME="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
+    echo "Node: ${HOSTNAME}"
+    echo "Server ID: ${SERVER_ID}"
+
     cat <<EOF > /etc/mysql/conf.d/group-repl.cnf
     [mysqld]
     server-id=${SERVER_ID}
     report_host=${HOSTNAME}.mysql
+
     log_bin=binlog
     binlog_format=ROW
     gtid_mode=ON
     enforce_gtid_consistency=ON
+    master_info_repository=TABLE
+    relay_log_info_repository=TABLE
     transaction_write_set_extraction=XXHASH64
+
     loose-group_replication_group_name="${GROUP_NAME}"
     loose-group_replication_start_on_boot=off
     loose-group_replication_bootstrap_group=off
@@ -201,43 +208,7 @@ command:
 
     echo "Starting MySQL..."
     docker-entrypoint.sh mysqld &
-    pid="$!"
-
-    echo "Waiting for MySQL to be ready..."
-    until mysqladmin ping -h127.0.0.1 --silent; do
-      sleep 2
-    done
-
-    echo "Installing plugin and replication user..."
-    mysql -uroot -p${MYSQL_ROOT_PASSWORD} <<SQL
-    INSTALL PLUGIN group_replication SONAME 'group_replication.so';
-    CREATE USER IF NOT EXISTS 'repl'@'%' IDENTIFIED BY 'replpass';
-    GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%';
-    FLUSH PRIVILEGES;
-    CHANGE MASTER TO MASTER_USER='repl', MASTER_PASSWORD='replpass'
-      FOR CHANNEL 'group_replication_recovery';
-SQL
-
-    if [ "$ORDINAL" = "0" ]; then
-      echo "Bootstrapping cluster on mysql-0"
-      mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "
-        SET GLOBAL group_replication_bootstrap_group=ON;
-        START GROUP_REPLICATION;
-        SET GLOBAL group_replication_bootstrap_group=OFF;
-      "
-    else
-      echo "Joining cluster from ${HOSTNAME}"
-      sleep 10
-
-      for i in {1..10}; do
-        mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "START GROUP_REPLICATION;" && break
-        echo "Retrying join..."
-        sleep 5
-      done
-    fi
-
-    echo "Group replication setup complete."
-    wait $pid
+    pi
 ```
 
 In mysql-1
