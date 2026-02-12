@@ -2,9 +2,8 @@
 
 Paste the below in mysql-statefulset.yml file
 
-<pre>
+```
 ---
-# 1️⃣ Secret for MySQL root password
 apiVersion: v1
 kind: Secret
 metadata:
@@ -13,7 +12,6 @@ type: Opaque
 stringData:
   root-password: root@123
 ---
-# 2️⃣ Persistent Volumes (Static, NFS)
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -71,7 +69,6 @@ spec:
     path: /var/nfs/jegan/mysql/mysql-2
     server: 192.168.10.200
 ---
-# 3️⃣ Headless Service for StatefulSet
 apiVersion: v1
 kind: Service
 metadata:
@@ -86,7 +83,6 @@ spec:
   selector:
     app: mysql
 ---
-# 4️⃣ StatefulSet
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -141,8 +137,7 @@ spec:
         resources:
           requests:
             storage: 10Gi
-</pre>
-
+```
 Run it
 ```
 oc apply -f mysql-statefulset.yml
