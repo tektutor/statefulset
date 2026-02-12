@@ -172,21 +172,74 @@ oc apply -f mysql-ss.yaml
 ```
 
 Now get inside master mysql instance
-```
-oc exec -it mysql-0 -- mysql -u root -p root@123
-SET SQL_LOG_BIN=0;
-CREATE USER 'repl'@'%' IDENTIFIED BY 'replpass';
-GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%';
-FLUSH PRIVILEGES;
-SET SQL_LOG_BIN=1;
+```command:
+  - bash
+  - -ec
+  - |
+    echo "Starting MySQL Group Replication setup..."
 
-CHANGE MASTER TO MASTER_USER='repl', MASTER_PASSWORD='replpass' FOR CHANNEL 'group_replication_recovery';
+    ORDINAL=${HOSTNAME##*-}
+    SERVER_ID=$((100 + ORDINAL))
+    GROUP_NAME="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
-INSTALL PLUGIN group_replication SONAME 'group_replication.so';
+    echo "Configuring server-id=${SERVER_ID}"
 
-SET GLOBAL group_replication_bootstrap_group=ON;
-START GROUP_REPLICATION;
-SET GLOBAL group_replication_bootstrap_group=OFF;
+    cat <<EOF > /etc/mysql/conf.d/group-replication.cnf
+    [mysqld]
+    server-id=${SERVER_ID}
+    report_host=${HOSTNAME}.mysql
+
+    log_bin=binlog
+    binlog_format=ROW
+    gtid_mode=ON
+    enforce_gtid_consistency=ON
+    master_info_repository=TABLE
+    relay_log_info_repository=TABLE
+    transaction_write_set_extraction=XXHASH64
+
+    loose-group_replication_group_name="${GROUP_NAME}"
+    loose-group_replication_start_on_boot=off
+    loose-group_replication_bootstrap_group=off
+    loose-group_replication_local_address="${HOSTNAME}.mysql:33061"
+    loose-group_replication_group_seeds="mysql-0.mysql:33061,mysql-1.mysql:33061,mysql-2.mysql:33061"
+    EOF
+
+    echo "Launching MySQL..."
+    docker-entrypoint.sh mysqld &
+    
+    pid="$!"
+
+    echo "Waiting for MySQL to become ready..."
+    until mysqladmin ping -h 127.0.0.1 --silent; do
+      sleep 2
+    done
+
+    echo "MySQL is ready."
+
+    echo "Installing group_replication plugin..."
+    mysql -uroot -p${MYSQL_ROOT_PASSWORD} <<SQL
+    INSTALL PLUGIN group_replication SONAME 'group_replication.so';
+    CREATE USER IF NOT EXISTS 'repl'@'%' IDENTIFIED BY 'replpass';
+    GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%';
+    FLUSH PRIVILEGES;
+    CHANGE MASTER TO MASTER_USER='repl', MASTER_PASSWORD='replpass'
+      FOR CHANNEL 'group_replication_recovery';
+    SQL
+
+    if [ "$ORDINAL" = "0" ]; then
+      echo "Bootstrapping group on mysql-0"
+      mysql -uroot -p${MYSQL_ROOT_PASSWORD} <<SQL
+      SET GLOBAL group_replication_bootstrap_group=ON;
+      START GROUP_REPLICATION;
+      SET GLOBAL group_replication_bootstrap_group=OFF;
+      SQL
+    else
+      echo "Joining group on ${HOSTNAME}"
+      sleep 10
+      mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "START GROUP_REPLICATION;"
+    fi
+
+    wait $pid
 ```
 
 In mysql-1
