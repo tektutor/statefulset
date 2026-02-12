@@ -206,7 +206,7 @@ Note NFS should have
 mkdir -p /var/nfs/jegan/mysql/mysql-0
 mkdir -p /var/nfs/jegan/mysql/mysql-1
 mkdir -p /var/nfs/jegan/mysql/mysql-2
-chmod -R 777 /nfs/jegan/mysql
+chmod -R 777 /var/nfs/jegan/mysql
 ```
 
 
