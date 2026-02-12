@@ -164,7 +164,7 @@ spec:
 
 Now let's deploy it
 ```
-oc apply -f pv.yml
+oc apply -f mysql-pv.yml
 oc apply -f mysql-svc.yaml
 oc apply -f mysql-cm.yaml
 oc apply -f mysql-secrets.yaml
