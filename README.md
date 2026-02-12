@@ -172,7 +172,8 @@ oc apply -f mysql-ss.yaml
 ```
 
 Now get inside master mysql instance
-```command:
+```
+command:
   - bash
   - -ec
   - |
