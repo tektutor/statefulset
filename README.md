@@ -1,4 +1,7 @@
 # Statefulset - mysql db cluster
+
+Paste the below in mysql-statefulset.yml file
+
 <pre>
 ---
 apiVersion: v1
@@ -34,6 +37,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolume
 metadata:
+
   name: mysql-pv-1
 spec:
   capacity:
@@ -144,3 +148,8 @@ spec:
   selector:
     app: mysql
 </pre>
+
+Run it
+```
+oc apply -f mysql-statefulset.yml
+```
