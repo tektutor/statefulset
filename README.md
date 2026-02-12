@@ -76,7 +76,7 @@ spec:
     spec:
       containers:
         - name: mysql
-          image: image-registry.openshift-image-registry.svc:5000/openshift/mariadb:1.0
+          image: docker.io/mysql:8.0
           ports:
           - containerPort: 3306
             name: mysql
