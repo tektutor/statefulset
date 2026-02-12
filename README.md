@@ -201,18 +201,19 @@ command:
     SET PERSIST group_replication_enforce_update_everywhere_checks=OFF;
 EOF
 
-    if [ "${HOSTNAME}" = "mysql-0" ]; then
-      echo "Bootstrapping cluster from mysql-0"
-      mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SET GLOBAL group_replication_bootstrap_group=ON;"
-      mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "START GROUP_REPLICATION;"
-      mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SET GLOBAL group_replication_bootstrap_group=OFF;"
-    else
-      echo "Joining cluster from ${HOSTNAME}"
-      sleep 10
-      mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "START GROUP_REPLICATION;"
-    fi
+if [ "${HOSTNAME}" = "mysql-0" ]; then
+  echo "Bootstrapping cluster from mysql-0"
+  mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SET GLOBAL group_replication_bootstrap_group=ON;"
+  mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "START GROUP_REPLICATION;"
+  mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "SET GLOBAL group_replication_bootstrap_group=OFF;"
+else
+  echo "Joining cluster from ${HOSTNAME}"
+  sleep 10
+  mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "START GROUP_REPLICATION;"
+fi
 
-    wait "$pid"
+wait "$pid"
+
 ```
 
 In mysql-1
